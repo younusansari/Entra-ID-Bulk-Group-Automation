@@ -47,4 +47,4 @@ jobs:
           TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
-          ./Modules/Authentication/Connect-MicrosoftGraph.ps1
+          ./modules/Authentication/Connect-MicrosoftGraph.ps1
