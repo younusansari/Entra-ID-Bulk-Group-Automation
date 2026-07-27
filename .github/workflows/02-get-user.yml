@@ -1,0 +1,48 @@
+name: Module 02 - Get User
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      environment:
+        description: "Select Environment"
+        required: true
+        type: choice
+        options:
+          - DEV
+          - UAT
+          - PRD
+
+      userEmail:
+        description: "User Email Address"
+        required: true
+        type: string
+
+jobs:
+
+  get-user:
+
+    runs-on: ubuntu-latest
+
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Prepare Runner
+        shell: pwsh
+        run: |
+          Import-Module Microsoft.Graph.Authentication
+          Import-Module Microsoft.Graph.Users
+
+      - name: Find User
+        shell: pwsh
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          USER_EMAIL: ${{ github.event.inputs.userEmail }}
+        run: |
+          ./modules/Users/Get-User.ps1
