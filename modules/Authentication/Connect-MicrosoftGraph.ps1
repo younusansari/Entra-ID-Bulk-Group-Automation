@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Connects to Microsoft Graph using App Registration.
+    Module 01 - Microsoft Graph Authentication
 
 .DESCRIPTION
-    Authenticates to Microsoft Graph using the Microsoft Graph
-    PowerShell SDK and validates the connection.
+    Connects to Microsoft Graph using
+    App Registration Client Secret authentication.
 
 .AUTHOR
     Younus Ansari
@@ -13,15 +13,9 @@
     1.0
 #>
 
-#------------------------------------------------------------
-# Script Configuration
-#------------------------------------------------------------
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-#------------------------------------------------------------
-# Banner
-#------------------------------------------------------------
 Write-Host ""
 Write-Host "==========================================================="
 Write-Host " Module 01 - Microsoft Graph Authentication"
@@ -29,62 +23,63 @@ Write-Host "==========================================================="
 Write-Host ""
 
 #------------------------------------------------------------
-# Read GitHub Secrets
+# Read Environment Variables
 #------------------------------------------------------------
+
 $ClientId     = $env:CLIENT_ID
 $TenantId     = $env:TENANT_ID
 $ClientSecret = $env:CLIENT_SECRET
 
 #------------------------------------------------------------
-# Validate Environment Variables
+# Validate Variables
 #------------------------------------------------------------
+
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
-    throw "CLIENT_ID environment variable is missing."
+    throw "CLIENT_ID is missing."
 }
 
 if ([string]::IsNullOrWhiteSpace($TenantId)) {
-    throw "TENANT_ID environment variable is missing."
+    throw "TENANT_ID is missing."
 }
 
 if ([string]::IsNullOrWhiteSpace($ClientSecret)) {
-    throw "CLIENT_SECRET environment variable is missing."
+    throw "CLIENT_SECRET is missing."
 }
 
 Write-Host "✓ Environment variables validated."
 Write-Host ""
 
 #------------------------------------------------------------
-# Install Graph SDK (if required)
+# Import Module
 #------------------------------------------------------------
-if (-not (Get-Module -ListAvailable Microsoft.Graph.Authentication))
-{
-    Write-Host "Installing Microsoft Graph Authentication module..."
-
-    Install-Module Microsoft.Graph.Authentication `
-        -Scope CurrentUser `
-        -Force
-}
 
 Import-Module Microsoft.Graph.Authentication
 
-Write-Host "✓ Microsoft Graph SDK loaded."
+Write-Host "✓ Microsoft Graph Authentication module loaded."
 Write-Host ""
 
 #------------------------------------------------------------
-# Create Credential Object
+# Convert Secret
 #------------------------------------------------------------
+
 $SecureSecret = ConvertTo-SecureString `
     $ClientSecret `
     -AsPlainText `
     -Force
 
-$Credential = New-Object `
-    System.Management.Automation.PSCredential `
-    ($ClientId, $SecureSecret)
+#------------------------------------------------------------
+# Create PSCredential
+#------------------------------------------------------------
+
+$Credential = New-Object System.Management.Automation.PSCredential(
+    $ClientId,
+    $SecureSecret
+)
 
 #------------------------------------------------------------
-# Connect to Microsoft Graph
+# Connect
 #------------------------------------------------------------
+
 Write-Host "Connecting to Microsoft Graph..."
 
 Connect-MgGraph `
@@ -96,15 +91,13 @@ Write-Host "✓ Connected successfully."
 Write-Host ""
 
 #------------------------------------------------------------
-# Retrieve Graph Context
+# Context
 #------------------------------------------------------------
+
 $Context = Get-MgContext
 
-#------------------------------------------------------------
-# Display Connection Information
-#------------------------------------------------------------
 Write-Host "==========================================================="
-Write-Host " Microsoft Graph Connection Information"
+Write-Host " Microsoft Graph Context"
 Write-Host "==========================================================="
 Write-Host ""
 
@@ -116,11 +109,8 @@ Write-Host ("{0,-20}: {1}" -f "Graph Cloud",$Context.Environment)
 
 Write-Host ""
 
-#------------------------------------------------------------
-# Disconnect
-#------------------------------------------------------------
 Disconnect-MgGraph
 
-Write-Host "✓ Disconnected from Microsoft Graph."
+Write-Host "✓ Disconnected."
 Write-Host ""
 Write-Host "Module completed successfully."
