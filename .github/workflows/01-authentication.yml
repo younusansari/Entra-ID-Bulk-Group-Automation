@@ -1,4 +1,4 @@
-name: Module 01 - Authentication
+name: Module 01 - Microsoft Graph Authentication
 
 on:
   workflow_dispatch:
@@ -13,34 +13,38 @@ on:
           - PRD
 
 jobs:
+
   authenticate:
+
+    name: Authenticate to Microsoft Graph
 
     runs-on: ubuntu-latest
 
     environment: ${{ github.event.inputs.environment }}
-
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Display Selected Environment
+        run: |
+          echo "========================================"
+          echo "Environment : ${{ github.event.inputs.environment }}"
+          echo "========================================"
 
-      - name: Install Microsoft Graph PowerShell SDK
+      - name: Prepare Runner
         shell: pwsh
         run: |
           Install-Module Microsoft.Graph.Authentication `
             -Scope CurrentUser `
             -Force
 
-      - name: Run Authentication Module
+      - name: Execute Authentication Module
         shell: pwsh
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
           ./Modules/Authentication/Connect-MicrosoftGraph.ps1
