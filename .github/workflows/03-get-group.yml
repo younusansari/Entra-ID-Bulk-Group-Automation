@@ -47,5 +47,4 @@ jobs:
 
           ./modules/authentication/connect-microsoftgraph.ps1
 
-          ./modules/groups/get-group.ps1 `
-            -GroupName $env:GROUP_NAME
+          ./modules/groups/get-group.ps1 -GroupName $env:GROUP_NAME
