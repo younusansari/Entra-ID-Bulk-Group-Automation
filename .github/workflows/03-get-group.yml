@@ -45,7 +45,7 @@ jobs:
           GROUP_NAME: ${{ github.event.inputs.groupName }}
         run: |
 
-          ./Modules/Authentication/Connect-MicrosoftGraph.ps1
+          ./modules/authentication/connect-microsoftgraph.ps1
 
-          ./Modules/Groups/Get-Group.ps1 `
+          ./modules/groups/get-group.ps1 `
             -GroupName $env:GROUP_NAME
