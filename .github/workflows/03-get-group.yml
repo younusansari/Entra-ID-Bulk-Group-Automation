@@ -46,15 +46,4 @@ jobs:
 
 
         run: |
-
-          Write-Host "===== STEP 1 ====="
-
-          ./modules/authentication/connect-microsoftgraph.ps1
-
-          Write-Host "===== STEP 2 ====="
-
-          ./modules/groups/get-group.ps1 -GroupName $env:GROUP_NAME
-
-          Write-Host "===== STEP 3 ====="
-
-          Disconnect-MgGraph
+         ./modules/groups/get-group.ps1 -GroupName $env:GROUP_NAME
