@@ -1,0 +1,51 @@
+name: Module 03 - Get Group
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select Environment"
+        required: true
+        type: choice
+        options:
+          - DEV
+          - UAT
+          - PRD
+
+      groupName:
+        description: "Group Display Name"
+        required: true
+        type: string
+
+jobs:
+  get-group:
+
+    runs-on: ubuntu-latest
+
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Prepare Runner
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+
+          Install-Module Microsoft.Graph -Scope CurrentUser -Force
+
+      - name: Execute Get Group Module
+        shell: pwsh
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          GROUP_NAME: ${{ github.event.inputs.groupName }}
+        run: |
+
+          ./Modules/Authentication/Connect-MicrosoftGraph.ps1
+
+          ./Modules/Groups/Get-Group.ps1 `
+            -GroupName $env:GROUP_NAME
