@@ -43,8 +43,18 @@ jobs:
           TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           GROUP_NAME: ${{ github.event.inputs.groupName }}
+
+
         run: |
+
+          Write-Host "===== STEP 1 ====="
 
           ./modules/authentication/connect-microsoftgraph.ps1
 
+          Write-Host "===== STEP 2 ====="
+
           ./modules/groups/get-group.ps1 -GroupName $env:GROUP_NAME
+
+          Write-Host "===== STEP 3 ====="
+
+          Disconnect-MgGraph
