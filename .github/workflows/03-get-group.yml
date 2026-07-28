@@ -32,9 +32,8 @@ jobs:
       - name: Prepare Runner
         shell: pwsh
         run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-
-          Install-Module Microsoft.Graph -Scope CurrentUser -Force
+          Import-Module Microsoft.Graph.Authentication
+          Import-Module Microsoft.Graph.Groups
 
       - name: Execute Get Group Module
         shell: pwsh
