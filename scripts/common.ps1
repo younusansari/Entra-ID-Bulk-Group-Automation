@@ -19,7 +19,12 @@ if (!(Test-Path "./logs")) {
     New-Item -ItemType Directory -Path "./logs" | Out-Null
 }
 
-$Global:LogFile = "./logs/entra-id-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$RequestName = [System.IO.Path]::GetFileNameWithoutExtension($env:REQUEST_FILE)
+$Environment = $env:ENVIRONMENT
+$RunNumber = $env:GITHUB_RUN_NUMBER
+$TimeStamp = Get-Date -Format "yyyyMMdd_HHmmss"
+
+$Global:LogFile = Join-Path $LogFolder "$RequestName`_$Environment`_Run$RunNumber`_$TimeStamp.log"
 
 function Write-Log {
 
