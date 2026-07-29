@@ -14,6 +14,13 @@ $ErrorActionPreference = "Stop"
 # Write-Log
 #------------------------------------------------------------
 
+# Global Log File
+if (!(Test-Path "./logs")) {
+    New-Item -ItemType Directory -Path "./logs" | Out-Null
+}
+
+$Global:LogFile = "./logs/entra-id-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+
 function Write-Log {
 
     [CmdletBinding()]
@@ -27,7 +34,13 @@ function Write-Log {
 
     $TimeStamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
-    Write-Host "[$TimeStamp] [$Level] $Message"
+    $LogEntry = "[$TimeStamp] [$Level] $Message"
+
+    # Console
+    Write-Host $LogEntry
+
+    # File
+    Add-Content -Path $Global:LogFile -Value $LogEntry
 }
 
 #------------------------------------------------------------
