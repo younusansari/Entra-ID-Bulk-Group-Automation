@@ -14,17 +14,29 @@ $ErrorActionPreference = "Stop"
 # Write-Log
 #------------------------------------------------------------
 
-# Global Log File
-if (!(Test-Path "./logs")) {
-    New-Item -ItemType Directory -Path "./logs" | Out-Null
+#------------------------------------------------------------
+# Logging Configuration
+#------------------------------------------------------------
+
+$LogFolder = "./logs"
+
+if (!(Test-Path $LogFolder)) {
+    New-Item -ItemType Directory -Path $LogFolder | Out-Null
 }
 
 $RequestName = [System.IO.Path]::GetFileNameWithoutExtension($env:REQUEST_FILE)
-$Environment = $env:ENVIRONMENT
-$RunNumber = $env:GITHUB_RUN_NUMBER
+
+if ([string]::IsNullOrWhiteSpace($RequestName)) {
+    $RequestName = "manual-run"
+}
+
+$Environment = if ($env:ENVIRONMENT) { $env:ENVIRONMENT } else { "LOCAL" }
+
+$RunNumber = if ($env:GITHUB_RUN_NUMBER) { $env:GITHUB_RUN_NUMBER } else { "0" }
+
 $TimeStamp = Get-Date -Format "yyyyMMdd_HHmmss"
 
-$Global:LogFile = Join-Path $LogFolder "$RequestName`_$Environment`_Run$RunNumber`_$TimeStamp.log"
+$Global:LogFile = Join-Path $LogFolder "$($RequestName)_$($Environment)_Run$($RunNumber)_$($TimeStamp).log"
 
 function Write-Log {
 
@@ -45,7 +57,9 @@ function Write-Log {
     Write-Host $LogEntry
 
     # File
+    if ($Global:LogFile -and (Test-Path $LogFolder)) {
     Add-Content -Path $Global:LogFile -Value $LogEntry
+    }
 }
 
 #------------------------------------------------------------
