@@ -1,0 +1,80 @@
+name: Entra ID Bulk Automation
+
+on:
+
+  workflow_dispatch:
+
+    inputs:
+
+      environment:
+
+        description: Environment
+
+        required: true
+
+        type: choice
+
+        options:
+
+          - DEV
+          - UAT
+          - PRD
+
+      action:
+
+        description: Action
+
+        required: true
+
+        type: choice
+
+        options:
+
+          - Add Users to Group
+          - Remove Users from Group
+          - Add Devices to Group
+          - Remove Devices from Group
+
+      csvFile:
+
+        description: CSV File
+
+        required: true
+
+jobs:
+
+  BulkAutomation:
+
+    runs-on: ubuntu-latest
+
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - name: Install Graph
+
+      shell: pwsh
+
+      run: |
+
+        Install-Module Microsoft.Graph -Scope CurrentUser -Force
+
+    - name: Execute
+
+      shell: pwsh
+
+      env:
+
+        CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+        TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+        CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+      run: |
+
+        ./Scripts/Main.ps1 `
+          -Action "${{ github.event.inputs.action }}" `
+          -CSV "./CSV/${{ github.event.inputs.csvFile }}"
