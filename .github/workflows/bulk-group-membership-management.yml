@@ -1,0 +1,143 @@
+name: Entra ID Bulk Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select Environment"
+        required: true
+        type: choice
+        options:
+          - DEV
+          - UAT
+          - PRD
+
+      operation:
+        description: "Select Operation"
+        required: true
+        type: choice
+        options:
+          - Add Users to Group
+          - Remove Users from Group
+          - Add Devices to Group
+          - Remove Devices from Group
+
+      request_file:
+        description: "Request file name (Example: finance-users.csv)"
+        required: true
+        default: "sample-users.csv"
+
+      dry_run:
+        description: "Execute in Dry Run mode?"
+        required: true
+        type: choice
+        default: "No"
+        options:
+          - "Yes"
+          - "No"
+
+permissions:
+  contents: read
+
+jobs:
+  bulk-automation:
+
+    name: Entra ID Bulk Automation
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    environment: ${{ github.event.inputs.environment }}
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+      ENVIRONMENT: ${{ github.event.inputs.environment }}
+      OPERATION: ${{ github.event.inputs.operation }}
+      REQUEST_FILE: ${{ github.event.inputs.request_file }}
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Display Workflow Inputs
+        run: |
+          Write-Host ""
+          Write-Host "======================================="
+          Write-Host " Entra ID Bulk Automation"
+          Write-Host "======================================="
+          Write-Host "Environment : $env:ENVIRONMENT"
+          Write-Host "Operation   : $env:OPERATION"
+          Write-Host "Request File: $env:REQUEST_FILE"
+          Write-Host "Dry Run     : $env:DRY_RUN"
+          Write-Host "======================================="
+
+      - name: Validate Request File
+        run: |
+
+          $CsvPath = "./csv/pending/$env:REQUEST_FILE"
+
+          if (!(Test-Path $CsvPath))
+          {
+              throw "Request file not found: $CsvPath"
+          }
+
+          Write-Host "Request file validated successfully."
+
+      - name: Install Microsoft Graph PowerShell Modules
+        run: |
+
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+
+          Install-Module Microsoft.Graph.Authentication -Scope CurrentUser -Force
+
+          Install-Module Microsoft.Graph.Users -Scope CurrentUser -Force
+
+          Install-Module Microsoft.Graph.Groups -Scope CurrentUser -Force
+
+          Install-Module Microsoft.Graph.Identity.DirectoryManagement -Scope CurrentUser -Force
+
+      - name: Execute Automation
+        run: |
+
+          ./scripts/main.ps1 `
+            -Operation "$env:OPERATION" `
+            -CsvPath "./csv/pending/$env:REQUEST_FILE" `
+            -DryRun "$env:DRY_RUN"
+
+      - name: Generate Job Summary
+        if: always()
+
+        run: |
+
+          Add-Content $env:GITHUB_STEP_SUMMARY "# Entra ID Bulk Automation"
+
+          Add-Content $env:GITHUB_STEP_SUMMARY ""
+
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Item | Value |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "|------|-------|"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Environment | $env:ENVIRONMENT |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Operation | $env:OPERATION |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Request File | $env:REQUEST_FILE |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Dry Run | $env:DRY_RUN |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Triggered By | $env:GITHUB_ACTOR |"
+
+      - name: Upload Logs
+        if: always()
+
+        uses: actions/upload-artifact@v4
+
+        with:
+          name: logs-${{ github.run_number }}
+          path: logs/
+          if-no-files-found: warn
+          retention-days: 30
