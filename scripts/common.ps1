@@ -159,30 +159,40 @@ function Test-GroupMembership {
 }
 
 function Write-ExecutionSummary {
+
+    [CmdletBinding()]
     param(
+        [Parameter(Mandatory)]
         [string]$Operation,
+
+        [Parameter(Mandatory)]
         [int]$Processed,
+
+        [Parameter(Mandatory)]
         [int]$Successful,
+
+        [Parameter(Mandatory)]
         [int]$Skipped,
+
+        [Parameter(Mandatory)]
         [int]$Failed,
+
+        [Parameter(Mandatory)]
         [datetime]$StartTime
     )
 
     $Duration = New-TimeSpan -Start $StartTime -End (Get-Date)
 
-    Write-Log ""
     Write-Log "========================================="
     Write-Log "Execution Summary"
     Write-Log "========================================="
     Write-Log "Operation      : $Operation"
     Write-Log "Request File   : $($env:REQUEST_FILE)"
     Write-Log "Environment    : $($env:ENVIRONMENT)"
-    Write-Log ""
     Write-Log "Processed      : $Processed"
     Write-Log "Successful     : $Successful"
     Write-Log "Skipped        : $Skipped"
     Write-Log "Failed         : $Failed"
-    Write-Log ""
     Write-Log ("Duration       : {0:N2} Seconds" -f $Duration.TotalSeconds)
     Write-Log "========================================="
 }
