@@ -22,24 +22,49 @@ function Add-UsersToGroup {
         [string]$DryRun
     )
 
+    $Processed  = 0
+    $Successful = 0
+    $Skipped    = 0
+    $Failed     = 0
+
+    $StartTime  = Get-Date
+
     Write-Log "Starting operation : Add Users to Group"
+    # Validate CSV Structure
+    Test-CsvColumns `
+        -CsvPath $CsvPath `
+        -RequiredColumns @("email", "group_name")
 
-    $Users = Import-Csv $CsvPath
+    $Users = Import-Csv -Path $CsvPath |
+        Sort-Object -Property email, group_name -Unique
+    
+    Write-Log "Total unique records to process: $($Users.Count)"
 
-    foreach ($User in $Users)
+    foreach ($UserRecord in $Users)
     {
+        $Processed++
         try
         {
-            $Email = $User.email.Trim()
-            $GroupName = $User.group_name.Trim()
+            $Email = "$($UserRecord.email)".Trim()
+            $GroupName = "$($UserRecord.group_name)".Trim()
 
-            Write-Log "Processing user [$Email]"
+            # Validate mandatory values
+            if ([string]::IsNullOrWhiteSpace($Email) -or
+                [string]::IsNullOrWhiteSpace($GroupName))
+            {
+                $Failed++
+                Write-Log "Invalid CSV record. Email='$Email', Group='$GroupName'. Both values are required." "ERROR"
+                continue
+            }
+
+            Write-Log "Processing user [$Email] for group [$GroupName]"
 
             # Get Group
             $Group = Get-EntraGroup -GroupName $GroupName
 
             if ($null -eq $Group)
             {
+                $Failed++
                 Write-Log "Group [$GroupName] not found." "ERROR"
                 continue
             }
@@ -49,6 +74,7 @@ function Add-UsersToGroup {
 
             if ($null -eq $EntraUser)
             {
+                $Failed++
                 Write-Log "User [$Email] not found." "ERROR"
                 continue
             }
@@ -56,6 +82,7 @@ function Add-UsersToGroup {
             # Check Membership
             if (Test-GroupMembership -GroupId $Group.Id -ObjectId $EntraUser.Id)
             {
+                $Skipped++
                 Write-Log "User [$Email] is already a member of [$GroupName]." "WARNING"
                 continue
             }
@@ -63,6 +90,7 @@ function Add-UsersToGroup {
             # Dry Run
             if ($DryRun -eq "Yes")
             {
+                $Skipped++
                 Write-Log "[Dry Run] User [$Email] would be added to [$GroupName]."
                 continue
             }
@@ -74,14 +102,24 @@ function Add-UsersToGroup {
                     "@odata.id" = "https://graph.microsoft.com/v1.0/directoryObjects/$($EntraUser.Id)"
                 }
 
+            $Successful++
             Write-Log "User [$Email] successfully added to [$GroupName]." "SUCCESS"
+            
 
         }
         catch
         {
+            $Failed++
             Write-Log $_.Exception.Message "ERROR"
         }
     }
-
-    Write-Log "Add Users to Group operation completed."
+    Write-Log "Finished processing all request records."
+    Write-ExecutionSummary `
+        -Operation "Add Users to Group" `
+        -Processed $Processed `
+        -Successful $Successful `
+        -Skipped $Skipped `
+        -Failed $Failed `
+        -StartTime $StartTime
+        
 }

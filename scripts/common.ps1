@@ -157,3 +157,66 @@ function Test-GroupMembership {
 
     return ($null -ne $Member)
 }
+
+function Write-ExecutionSummary {
+    param(
+        [string]$Operation,
+        [int]$Processed,
+        [int]$Successful,
+        [int]$Skipped,
+        [int]$Failed,
+        [datetime]$StartTime
+    )
+
+    $Duration = New-TimeSpan -Start $StartTime -End (Get-Date)
+
+    Write-Log ""
+    Write-Log "========================================="
+    Write-Log "Execution Summary"
+    Write-Log "========================================="
+    Write-Log "Operation      : $Operation"
+    Write-Log "Request File   : $($env:REQUEST_FILE)"
+    Write-Log "Environment    : $($env:ENVIRONMENT)"
+    Write-Log ""
+    Write-Log "Processed      : $Processed"
+    Write-Log "Successful     : $Successful"
+    Write-Log "Skipped        : $Skipped"
+    Write-Log "Failed         : $Failed"
+    Write-Log ""
+    Write-Log ("Duration       : {0:N2} Seconds" -f $Duration.TotalSeconds)
+    Write-Log "========================================="
+}
+
+
+function Test-CsvColumns {
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$CsvPath,
+
+        [Parameter(Mandatory)]
+        [string[]]$RequiredColumns
+    )
+
+    $Csv = Import-Csv -Path $CsvPath
+
+    if ($Csv.Count -eq 0) {
+        throw "CSV file is empty."
+    }
+
+    $Headers = $Csv[0].PSObject.Properties.Name
+
+    foreach ($Column in $RequiredColumns) {
+
+        if ($Column -notin $Headers) {
+
+            throw "Required column '$Column' is missing from the CSV file."
+
+        }
+
+    }
+
+    Write-Log "CSV column validation successful."
+
+}
