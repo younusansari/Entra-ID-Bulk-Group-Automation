@@ -114,6 +114,10 @@ jobs:
 
           Get-Command Connect-MgGraph -Syntax
 
+      - name: Verify Remove Cmdlet
+        run: |
+            Get-Command Remove-MgGroupMemberDirectoryObjectByRef
+
       - name: Execute Automation
         run: |
 
