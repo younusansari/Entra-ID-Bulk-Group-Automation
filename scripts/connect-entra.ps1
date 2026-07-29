@@ -57,10 +57,14 @@ function Connect-EntraGraph {
             -AsPlainText `
             -Force
 
+        $Credential = New-Object System.Management.Automation.PSCredential (
+            $ClientId,
+            $SecureClientSecret
+        )
+
         Connect-MgGraph `
             -TenantId $TenantId `
-            -ClientId $ClientId `
-            -ClientSecret $SecureClientSecret `
+            -ClientSecretCredential $Credential `
             -NoWelcome
 
         # Verify connection

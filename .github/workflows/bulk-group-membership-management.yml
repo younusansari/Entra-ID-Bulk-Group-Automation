@@ -106,6 +106,16 @@ jobs:
 
           Install-Module Microsoft.Graph.Identity.DirectoryManagement -Scope CurrentUser -Force
 
+          - name: Display Graph SDK Information
+
+            run: |
+
+                Get-InstalledModule Microsoft.Graph.Authentication
+
+                Get-Command Connect-MgGraph
+
+                Get-Command Connect-MgGraph -Syntax
+
       - name: Execute Automation
         run: |
 
