@@ -628,13 +628,8 @@ jobs:
               -DryRun "$env:DRY_RUN"
 
 
-
-
       #======================================================
       # 17 - Move Request File to Completed
-      #
-      # The CSV exists on the csv-upload branch.
-      # Perform the move directly on that branch.
       #======================================================
 
       - name: Move Request File to Completed
@@ -644,15 +639,88 @@ jobs:
 
           Write-Host ""
           Write-Host "==========================================================="
-          Write-Host " Moving Request File to Completed"
+          Write-Host " Move Request File to Completed"
           Write-Host "==========================================================="
           Write-Host ""
 
+          #--------------------------------------------------
+          # Get environment folder
+          #--------------------------------------------------
+
           $EnvironmentFolder = $env:ENVIRONMENT.ToLower()
 
-          $SourceRelativePath = "csv/$EnvironmentFolder/pending/$env:REQUEST_FILE"
+          #--------------------------------------------------
+          # Get original request file
+          #--------------------------------------------------
 
-          $DestinationRelativePath = "csv/$EnvironmentFolder/completed/$env:REQUEST_FILE"
+          $OriginalFileName = $env:REQUEST_FILE
+
+          if ([string]::IsNullOrWhiteSpace($OriginalFileName))
+          {
+              throw "REQUEST_FILE environment variable is empty."
+          }
+
+          #--------------------------------------------------
+          # Generate UTC timestamp
+          # Format: yyyyMMdd-HHmmss
+          #--------------------------------------------------
+
+          $Timestamp = [DateTimeOffset]::UtcNow.ToString(
+              "yyyyMMdd-HHmmss"
+          )
+
+          #--------------------------------------------------
+          # Get GitHub Run Number
+          #--------------------------------------------------
+
+          $RunNumber = $env:GITHUB_RUN_NUMBER
+
+          if ([string]::IsNullOrWhiteSpace($RunNumber))
+          {
+              throw "GITHUB_RUN_NUMBER is not available."
+          }
+
+          #--------------------------------------------------
+          # Get file name without extension
+          #--------------------------------------------------
+
+          $BaseName = [System.IO.Path]::GetFileNameWithoutExtension(
+              $OriginalFileName
+          )
+
+          #--------------------------------------------------
+          # Create completed file name
+          #
+          # Example:
+          #
+          # dev-add-users-to-groups_20260813-013045_run-152.csv
+          #--------------------------------------------------
+
+          $CompletedFileName = "{0}_{1}_run-{2}.csv" -f `
+              $BaseName, `
+              $Timestamp, `
+              $RunNumber
+
+          #--------------------------------------------------
+          # Define Git relative paths
+          #--------------------------------------------------
+
+          $SourceRelativePath = `
+              "csv/$EnvironmentFolder/pending/$OriginalFileName"
+
+          $DestinationRelativePath = `
+              "csv/$EnvironmentFolder/completed/$CompletedFileName"
+
+          #--------------------------------------------------
+          # Display information
+          #--------------------------------------------------
+
+          Write-Host "Environment       : $env:ENVIRONMENT"
+          Write-Host "Original File     : $OriginalFileName"
+          Write-Host "Completed File    : $CompletedFileName"
+          Write-Host "Timestamp UTC     : $Timestamp"
+          Write-Host "GitHub Run Number : $RunNumber"
+          Write-Host ""
 
           Write-Host "Source      : $SourceRelativePath"
           Write-Host "Destination : $DestinationRelativePath"
@@ -666,55 +734,96 @@ jobs:
 
           git fetch origin csv-upload
 
+          if ($LASTEXITCODE -ne 0)
+          {
+              throw "Failed to fetch csv-upload branch."
+          }
+
+          Write-Host "✓ csv-upload branch fetched."
+
           #--------------------------------------------------
-          # Create temporary working directory
+          # Create temporary worktree
           #--------------------------------------------------
 
           $WorktreePath = Join-Path `
               $env:RUNNER_TEMP `
               "csv-upload-worktree"
 
-          if (Test-Path $WorktreePath)
+          Write-Host ""
+          Write-Host "Worktree : $WorktreePath"
+          Write-Host ""
+
+          #--------------------------------------------------
+          # Remove existing worktree if present
+          #--------------------------------------------------
+
+          if (Test-Path -LiteralPath $WorktreePath)
           {
-              Remove-Item `
-                  -Path $WorktreePath `
-                  -Recurse `
-                  -Force
+              Write-Host "Removing existing temporary worktree..."
+
+              git worktree remove `
+                  $WorktreePath `
+                  --force `
+                  2>$null
+
+              if (Test-Path -LiteralPath $WorktreePath)
+              {
+                  Remove-Item `
+                      -LiteralPath $WorktreePath `
+                      -Recurse `
+                      -Force
+              }
           }
 
-          Write-Host "Creating csv-upload worktree..."
+          #--------------------------------------------------
+          # Create worktree from csv-upload
+          #--------------------------------------------------
+
+          Write-Host "Creating temporary csv-upload worktree..."
 
           git worktree add `
               --detach `
               $WorktreePath `
               origin/csv-upload
 
+          if ($LASTEXITCODE -ne 0)
+          {
+              throw "Failed to create csv-upload worktree."
+          }
+
+          Write-Host "✓ Temporary worktree created."
+
           try
           {
-              #--------------------------------------------------
-              # Source path
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Create absolute source path
+              #------------------------------------------------
 
               $SourcePath = Join-Path `
                   $WorktreePath `
                   $SourceRelativePath
 
-              #--------------------------------------------------
-              # Destination path
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Create absolute destination path
+              #------------------------------------------------
 
               $DestinationPath = Join-Path `
                   $WorktreePath `
                   $DestinationRelativePath
 
               Write-Host ""
-              Write-Host "Source      : $SourcePath"
-              Write-Host "Destination : $DestinationPath"
+              Write-Host "Source Path:"
+              Write-Host $SourcePath
+
+              Write-Host ""
+              Write-Host "Destination Path:"
+              Write-Host $DestinationPath
+
               Write-Host ""
 
-              #--------------------------------------------------
-              # Validate source
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Validate source CSV
+              #------------------------------------------------
 
               if (-not (
                   Test-Path `
@@ -722,16 +831,22 @@ jobs:
                       -PathType Leaf
               ))
               {
-                  throw "Pending request file not found on csv-upload branch: $SourceRelativePath"
+                  throw "Pending request file was not found: $SourceRelativePath"
               }
 
-              #--------------------------------------------------
-              # Create completed folder
-              #--------------------------------------------------
+              Write-Host "✓ Pending request file found."
+
+              #------------------------------------------------
+              # Get completed directory
+              #------------------------------------------------
 
               $CompletedDirectory = Split-Path `
                   -Parent `
                   $DestinationPath
+
+              #------------------------------------------------
+              # Create completed directory if required
+              #------------------------------------------------
 
               if (-not (
                   Test-Path `
@@ -739,38 +854,73 @@ jobs:
                       -PathType Container
               ))
               {
+                  Write-Host "Creating completed directory..."
+
                   New-Item `
                       -ItemType Directory `
                       -Path $CompletedDirectory `
                       -Force |
                       Out-Null
+
+                  Write-Host "✓ Completed directory created."
+              }
+              else
+              {
+                  Write-Host "✓ Completed directory already exists."
               }
 
-              #--------------------------------------------------
-              # Prevent accidental overwrite
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Prevent overwrite
+              #------------------------------------------------
 
               if (
                   Test-Path `
                       -LiteralPath $DestinationPath
               )
               {
-                  throw "Completed request already exists: $DestinationRelativePath"
+                  throw "Completed file already exists: $DestinationRelativePath"
               }
 
-              #--------------------------------------------------
+              #------------------------------------------------
               # Move CSV
-              #--------------------------------------------------
+              #------------------------------------------------
+
+              Write-Host ""
+              Write-Host "Moving CSV..."
 
               Move-Item `
                   -LiteralPath $SourcePath `
                   -Destination $DestinationPath
 
+              #------------------------------------------------
+              # Verify move
+              #------------------------------------------------
+
+              if (-not (
+                  Test-Path `
+                      -LiteralPath $DestinationPath `
+                      -PathType Leaf
+              ))
+              {
+                  throw "CSV move could not be verified."
+              }
+
+              if (
+                  Test-Path `
+                      -LiteralPath $SourcePath
+              )
+              {
+                  throw "Source CSV still exists after move."
+              }
+
               Write-Host "✓ CSV moved successfully."
 
-              #--------------------------------------------------
-              # Configure Git
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Configure Git identity
+              #------------------------------------------------
+
+              Write-Host ""
+              Write-Host "Configuring Git identity..."
 
               git -C $WorktreePath config `
                   user.name `
@@ -780,34 +930,74 @@ jobs:
                   user.email `
                   "41898282+github-actions[bot]@users.noreply.github.com"
 
-              #--------------------------------------------------
-              # Stage only the CSV movement
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Stage CSV movement
+              #------------------------------------------------
+
+              Write-Host ""
+              Write-Host "Staging CSV movement..."
 
               git -C $WorktreePath add `
                   "$SourceRelativePath" `
                   "$DestinationRelativePath"
 
-              #--------------------------------------------------
-              # Check changes
-              #--------------------------------------------------
+              if ($LASTEXITCODE -ne 0)
+              {
+                  throw "Failed to stage CSV movement."
+              }
+
+              #------------------------------------------------
+              # Display Git status
+              #------------------------------------------------
 
               Write-Host ""
-              Write-Host "Git changes:"
+              Write-Host "Git Changes:"
               Write-Host ""
 
               git -C $WorktreePath status --short
 
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Verify staged changes
+              #------------------------------------------------
+
+              $StagedChanges = git `
+                  -C $WorktreePath `
+                  diff `
+                  --cached `
+                  --name-only
+
+              if ([string]::IsNullOrWhiteSpace(
+                  ($StagedChanges -join "")
+              ))
+              {
+                  throw "No staged changes detected."
+              }
+
+              #------------------------------------------------
               # Commit
-              #--------------------------------------------------
+              #------------------------------------------------
+
+              $CommitMessage = `
+                  "Move $OriginalFileName to completed - Run $RunNumber"
+
+              Write-Host ""
+              Write-Host "Commit Message:"
+              Write-Host $CommitMessage
+              Write-Host ""
 
               git -C $WorktreePath commit `
-                  -m "Move $env:REQUEST_FILE to completed"
+                  -m "$CommitMessage"
 
-              #--------------------------------------------------
+              if ($LASTEXITCODE -ne 0)
+              {
+                  throw "Git commit failed."
+              }
+
+              Write-Host "✓ Commit created successfully."
+
+              #------------------------------------------------
               # Push to csv-upload
-              #--------------------------------------------------
+              #------------------------------------------------
 
               Write-Host ""
               Write-Host "Pushing changes to csv-upload..."
@@ -816,14 +1006,39 @@ jobs:
                   origin `
                   HEAD:csv-upload
 
+              if ($LASTEXITCODE -ne 0)
+              {
+                  throw "Failed to push changes to csv-upload."
+              }
+
               Write-Host ""
-              Write-Host "✓ CSV movement committed and pushed successfully."
+              Write-Host "✓ Changes pushed successfully."
+
+              #------------------------------------------------
+              # Final summary
+              #------------------------------------------------
+
+              Write-Host ""
+              Write-Host "==========================================================="
+              Write-Host " CSV Processing Complete"
+              Write-Host "==========================================================="
+              Write-Host ""
+
+              Write-Host "Environment       : $env:ENVIRONMENT"
+              Write-Host "Original File     : $OriginalFileName"
+              Write-Host "Completed File    : $CompletedFileName"
+              Write-Host "Timestamp UTC     : $Timestamp"
+              Write-Host "GitHub Run Number : $RunNumber"
+              Write-Host ""
+              Write-Host "Status            : Completed"
+              Write-Host ""
+
           }
           finally
           {
-              #--------------------------------------------------
-              # Remove temporary worktree
-              #--------------------------------------------------
+              #------------------------------------------------
+              # Cleanup temporary worktree
+              #------------------------------------------------
 
               Write-Host ""
               Write-Host "Cleaning up temporary worktree..."
@@ -832,7 +1047,19 @@ jobs:
                   $WorktreePath `
                   --force `
                   2>$null
+
+              if (Test-Path -LiteralPath $WorktreePath)
+              {
+                  Remove-Item `
+                      -LiteralPath $WorktreePath `
+                      -Recurse `
+                      -Force `
+                      -ErrorAction SilentlyContinue
+              }
+
+              Write-Host "✓ Worktree cleanup completed."
           }
+
 
 
       #======================================================
