@@ -244,12 +244,8 @@ jobs:
       #======================================================
       # 08 - Validate Environment Folder
       #======================================================
-
       - name: Validate Environment Folder
         run: |
-
-          $EnvironmentPath = "./csv/$env:ENVIRONMENT"
-          $PendingPath = "$EnvironmentPath/Pending"
 
           Write-Host ""
           Write-Host "==========================================================="
@@ -257,8 +253,15 @@ jobs:
           Write-Host "==========================================================="
           Write-Host ""
 
-          Write-Host "Environment Path: $EnvironmentPath"
-          Write-Host "Pending Path    : $PendingPath"
+          $Environment = $env:ENVIRONMENT.ToLower()
+
+          $EnvironmentPath = "./csv/$Environment"
+          $PendingPath = "$EnvironmentPath/pending"
+
+          Write-Host "Selected Environment : $env:ENVIRONMENT"
+          Write-Host "Filesystem Environment: $Environment"
+          Write-Host "Environment Path     : $EnvironmentPath"
+          Write-Host "Pending Path         : $PendingPath"
           Write-Host ""
 
           if (-not (
@@ -282,6 +285,7 @@ jobs:
           Write-Host "✓ Environment folder exists."
           Write-Host "✓ Pending folder exists."
 
+      
       #======================================================
       # 09 - Determine Request File
       #======================================================
@@ -289,63 +293,66 @@ jobs:
       - name: Determine Request File
         run: |
 
-          $Environment = $env:ENVIRONMENT
-          $Operation = $env:OPERATION
+            $Environment = $env:ENVIRONMENT
+            $EnvironmentFolder = $Environment.ToLower()
+            $Operation = $env:OPERATION
 
-          switch ($Operation)
-          {
-              "Add Users to Group"
-              {
-                  $ActionName = "add-users-to-groups"
-              }
+            switch ($Operation)
+            {
+                "Add Users to Group"
+                {
+                    $ActionName = "add-users-to-groups"
+                }
 
-              "Remove Users from Group"
-              {
-                  $ActionName = "remove-users-from-groups"
-              }
+                "Remove Users from Group"
+                {
+                    $ActionName = "remove-users-from-groups"
+                }
 
-              "Add Devices to Group"
-              {
-                  $ActionName = "add-devices-to-groups"
-              }
+                "Add Devices to Group"
+                {
+                    $ActionName = "add-devices-to-groups"
+                }
 
-              "Remove Devices from Group"
-              {
-                  $ActionName = "remove-devices-from-groups"
-              }
+                "Remove Devices from Group"
+                {
+                    $ActionName = "remove-devices-from-groups"
+                }
 
-              default
-              {
-                  throw "Unsupported operation: $Operation"
-              }
-          }
+                default
+                {
+                    throw "Unsupported operation: $Operation"
+                }
+            }
 
-          $RequestFile = "$($Environment.ToLower())-$ActionName.csv"
+            $RequestFile = "$EnvironmentFolder-$ActionName.csv"
 
-          $CsvPath = "./csv/$Environment/Pending/$RequestFile"
+            $CsvPath = "./csv/$EnvironmentFolder/pending/$RequestFile"
 
-          "REQUEST_FILE=$RequestFile" |
-              Out-File `
-                  -FilePath $env:GITHUB_ENV `
-                  -Encoding utf8 `
-                  -Append
+            "REQUEST_FILE=$RequestFile" |
+                Out-File `
+                    -FilePath $env:GITHUB_ENV `
+                    -Encoding utf8 `
+                    -Append
 
-          "CSV_PATH=$CsvPath" |
-              Out-File `
-                  -FilePath $env:GITHUB_ENV `
-                  -Encoding utf8 `
-                  -Append
+            "CSV_PATH=$CsvPath" |
+                Out-File `
+                    -FilePath $env:GITHUB_ENV `
+                    -Encoding utf8 `
+                    -Append
 
-          Write-Host ""
-          Write-Host "==========================================================="
-          Write-Host " Request File"
-          Write-Host "==========================================================="
-          Write-Host ""
+            Write-Host ""
+            Write-Host "==========================================================="
+            Write-Host " Request File"
+            Write-Host "==========================================================="
+            Write-Host ""
 
-          Write-Host "Environment : $Environment"
-          Write-Host "Operation   : $Operation"
-          Write-Host "Request File: $RequestFile"
-          Write-Host "CSV Path    : $CsvPath"
+            Write-Host "Selected Environment : $Environment"
+            Write-Host "Filesystem Folder    : $EnvironmentFolder"
+            Write-Host "Operation            : $Operation"
+            Write-Host "Request File         : $RequestFile"
+            Write-Host "CSV Path             : $CsvPath"
+              
 
       #======================================================
       # 10 - Validate Request File
@@ -380,10 +387,12 @@ jobs:
               Write-Host "./csv/$env:ENVIRONMENT/Pending"
               Write-Host ""
 
-              Get-ChildItem `
-                  -LiteralPath "./csv/$env:ENVIRONMENT/Pending" `
-                  -File |
-                  Select-Object -ExpandProperty Name
+                $EnvironmentFolder = $env:ENVIRONMENT.ToLower()
+
+                Get-ChildItem `
+                    -LiteralPath "./csv/$EnvironmentFolder/pending" `
+                    -File |
+                    Select-Object -ExpandProperty Name
 
               throw "Request file not found: $env:CSV_PATH"
           }
