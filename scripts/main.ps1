@@ -101,7 +101,7 @@ try {
 
         "Remove Devices from Group" {
 
-            . "$ScriptRoot/remove-devices-to-group.ps1"
+            . "$ScriptRoot/remove-devices-from-group.ps1"
 
             Remove-DevicesFromGroup `
                 -CsvPath $CsvPath `
