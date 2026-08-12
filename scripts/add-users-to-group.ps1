@@ -2,9 +2,13 @@
 .SYNOPSIS
     Bulk add users to Entra ID security groups.
 
+.DESCRIPTION
+    Reads UserEmail and GroupName from the request CSV
+    and adds users to the specified Entra ID groups.
+
 .NOTES
-    Author  : Younus Ansari
-    Project : Entra ID Bulk User Device Automation
+    Author  : Younous Ansari
+    Project : Entra ID Bulk Group Automation
 #>
 
 Set-StrictMode -Version Latest
@@ -27,75 +31,139 @@ function Add-UsersToGroup {
     $Skipped    = 0
     $Failed     = 0
 
-    $StartTime  = Get-Date
+    $StartTime = Get-Date
 
     Write-Log "Starting operation : Add Users to Group"
+
+    #--------------------------------------------------------
     # Validate CSV Structure
+    #--------------------------------------------------------
+
     Test-CsvColumns `
         -CsvPath $CsvPath `
-        -RequiredColumns @("email", "group_name")
+        -RequiredColumns @(
+            "UserEmail",
+            "GroupName"
+        )
 
-    $Users = Import-Csv -Path $CsvPath |
-        Sort-Object -Property email, group_name -Unique
-    
+    #--------------------------------------------------------
+    # Import CSV
+    #--------------------------------------------------------
+
+    $Users = @(
+        Import-Csv -Path $CsvPath |
+        Sort-Object -Property UserEmail, GroupName -Unique
+    )
+
     Write-Log "Total unique records to process: $($Users.Count)"
+
+    #--------------------------------------------------------
+    # Process Records
+    #--------------------------------------------------------
 
     foreach ($UserRecord in $Users)
     {
         $Processed++
+
         try
         {
-            $Email = "$($UserRecord.email)".Trim()
-            $GroupName = "$($UserRecord.group_name)".Trim()
+            $Email = "$($UserRecord.UserEmail)".Trim()
+            $GroupName = "$($UserRecord.GroupName)".Trim()
 
-            # Validate mandatory values
-            if ([string]::IsNullOrWhiteSpace($Email) -or
-                [string]::IsNullOrWhiteSpace($GroupName))
+            #------------------------------------------------
+            # Validate Record
+            #------------------------------------------------
+
+            if (
+                [string]::IsNullOrWhiteSpace($Email) -or
+                [string]::IsNullOrWhiteSpace($GroupName)
+            )
             {
                 $Failed++
-                Write-Log "Invalid CSV record. Email='$Email', Group='$GroupName'. Both values are required." "ERROR"
+
+                Write-Log `
+                    "Invalid CSV record. UserEmail='$Email', GroupName='$GroupName'. Both values are required." `
+                    "ERROR"
+
                 continue
             }
 
-            Write-Log "Processing user [$Email] for group [$GroupName]"
+            Write-Log `
+                "Processing user [$Email] for group [$GroupName]"
 
+            #------------------------------------------------
             # Get Group
-            $Group = Get-EntraGroup -GroupName $GroupName
+            #------------------------------------------------
+
+            $Group = Get-EntraGroup `
+                -GroupName $GroupName
 
             if ($null -eq $Group)
             {
                 $Failed++
-                Write-Log "Group [$GroupName] not found." "ERROR"
+
+                Write-Log `
+                    "Group [$GroupName] not found." `
+                    "ERROR"
+
                 continue
             }
 
+            #------------------------------------------------
             # Get User
-            $EntraUser = Get-EntraUser -Email $Email
+            #------------------------------------------------
+
+            $EntraUser = Get-EntraUser `
+                -Email $Email
 
             if ($null -eq $EntraUser)
             {
                 $Failed++
-                Write-Log "User [$Email] not found." "ERROR"
+
+                Write-Log `
+                    "User [$Email] not found." `
+                    "ERROR"
+
                 continue
             }
 
+            #------------------------------------------------
             # Check Membership
-            if (Test-GroupMembership -GroupId $Group.Id -ObjectId $EntraUser.Id)
+            #------------------------------------------------
+
+            if (
+                Test-GroupMembership `
+                    -GroupId $Group.Id `
+                    -ObjectId $EntraUser.Id
+            )
             {
                 $Skipped++
-                Write-Log "User [$Email] is already a member of [$GroupName]." "WARNING"
+
+                Write-Log `
+                    "User [$Email] is already a member of [$GroupName]." `
+                    "WARNING"
+
                 continue
             }
 
+            #------------------------------------------------
             # Dry Run
+            #------------------------------------------------
+
             if ($DryRun -eq "Yes")
             {
                 $Skipped++
-                Write-Log "[Dry Run] User [$Email] would be added to [$GroupName]."
+
+                Write-Log `
+                    "[Dry Run] User [$Email] would be added to [$GroupName]."
+
                 continue
             }
 
+            #------------------------------------------------
             # Add User
+            #------------------------------------------------
+
             New-MgGroupMemberByRef `
                 -GroupId $Group.Id `
                 -BodyParameter @{
@@ -103,17 +171,27 @@ function Add-UsersToGroup {
                 }
 
             $Successful++
-            Write-Log "User [$Email] successfully added to [$GroupName]." "SUCCESS"
-            
 
+            Write-Log `
+                "User [$Email] successfully added to [$GroupName]." `
+                "SUCCESS"
         }
         catch
         {
             $Failed++
-            Write-Log $_.Exception.Message "ERROR"
+
+            Write-Log `
+                $_.Exception.Message `
+                "ERROR"
         }
     }
+
+    #--------------------------------------------------------
+    # Execution Summary
+    #--------------------------------------------------------
+
     Write-Log "Finished processing all request records."
+
     Write-ExecutionSummary `
         -Operation "Add Users to Group" `
         -Processed $Processed `
@@ -121,5 +199,4 @@ function Add-UsersToGroup {
         -Skipped $Skipped `
         -Failed $Failed `
         -StartTime $StartTime
-        
 }
