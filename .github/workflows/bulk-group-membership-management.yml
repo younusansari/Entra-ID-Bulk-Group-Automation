@@ -628,7 +628,131 @@ jobs:
               -DryRun "$env:DRY_RUN"
 
       #======================================================
-      # 17 - Generate Job Summary
+      # 17 - Move Request File to Completed
+      #
+      # Only runs when the automation succeeds.
+      # Failed requests remain in pending.
+      #======================================================
+
+      - name: Move Request File to Completed
+        if: success()
+        shell: pwsh
+        run: |
+
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " Moving Request File to Completed"
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          $EnvironmentFolder = $env:ENVIRONMENT.ToLower()
+
+          $SourcePath = "./csv/$EnvironmentFolder/pending/$env:REQUEST_FILE"
+
+          $CompletedFolder = "./csv/$EnvironmentFolder/completed"
+
+          $DestinationPath = "$CompletedFolder/$env:REQUEST_FILE"
+
+          Write-Host "Source      : $SourcePath"
+          Write-Host "Destination : $DestinationPath"
+          Write-Host ""
+
+          #--------------------------------------------------
+          # Validate source
+          #--------------------------------------------------
+
+          if (-not (
+              Test-Path `
+                  -LiteralPath $SourcePath `
+                  -PathType Leaf
+          ))
+          {
+              throw "Pending request file not found: $SourcePath"
+          }
+
+          #--------------------------------------------------
+          # Create completed folder if required
+          #--------------------------------------------------
+
+          if (-not (
+              Test-Path `
+                  -LiteralPath $CompletedFolder `
+                  -PathType Container
+          ))
+          {
+              New-Item `
+                  -ItemType Directory `
+                  -Path $CompletedFolder `
+                  -Force |
+                  Out-Null
+          }
+
+          #--------------------------------------------------
+          # Prevent accidental overwrite
+          #--------------------------------------------------
+
+          if (
+              Test-Path `
+                  -LiteralPath $DestinationPath
+          )
+          {
+              throw "Completed request file already exists: $DestinationPath"
+          }
+
+          #--------------------------------------------------
+          # Move file
+          #--------------------------------------------------
+
+          Move-Item `
+              -LiteralPath $SourcePath `
+              -Destination $DestinationPath
+
+          Write-Host "✓ CSV moved successfully."
+          Write-Host ""
+
+          #--------------------------------------------------
+          # Configure Git
+          #--------------------------------------------------
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          #--------------------------------------------------
+          # Stage only the CSV movement
+          #--------------------------------------------------
+
+          git add `
+              "$SourcePath" `
+              "$DestinationPath"
+
+          #--------------------------------------------------
+          # Verify changes
+          #--------------------------------------------------
+
+          Write-Host "Git changes:"
+          git status --short
+
+          #--------------------------------------------------
+          # Commit
+          #--------------------------------------------------
+
+          git commit `
+              -m "Move $env:REQUEST_FILE to completed"
+
+          #--------------------------------------------------
+          # Push specifically to csv-upload
+          #--------------------------------------------------
+
+          git push origin HEAD:csv-upload
+
+          Write-Host ""
+          Write-Host "✓ CSV movement committed to csv-upload branch."
+
+
+
+      #======================================================
+      # 18 - Generate Job Summary
       #======================================================
 
       - name: Generate Job Summary
@@ -680,7 +804,7 @@ jobs:
               "| Run Number | $env:GITHUB_RUN_NUMBER |"
 
       #======================================================
-      # 18 - Upload Logs
+      # 19 - Upload Logs
       #======================================================
 
       - name: Upload Logs
