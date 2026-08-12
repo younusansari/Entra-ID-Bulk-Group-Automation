@@ -447,15 +447,15 @@ jobs:
           if ($env:INPUT_TYPE -eq "Users")
           {
               $RequiredColumns = @(
-                  "UserEmail",
-                  "GroupName"
+                  "email",
+                  "group_name"
               )
           }
           else
           {
               $RequiredColumns = @(
-                  "DeviceName",
-                  "GroupName"
+                  "device_name",
+                  "group_name"
               )
           }
 
