@@ -3,6 +3,7 @@ name: Entra ID Bulk Automation
 on:
   workflow_dispatch:
     inputs:
+
       environment:
         description: "Select Environment"
         required: true
@@ -22,16 +23,11 @@ on:
           - Add Devices to Group
           - Remove Devices from Group
 
-      request_file:
-        description: "Request file name (Example: finance-users.csv)"
-        required: true
-        default: "sample-users.csv"
-
       dry_run:
         description: "Execute in Dry Run mode?"
         required: true
         type: choice
-        default: "No"
+        default: "Yes"
         options:
           - "Yes"
           - "No"
@@ -40,6 +36,7 @@ permissions:
   contents: read
 
 jobs:
+
   bulk-automation:
 
     name: Entra ID Bulk Automation
@@ -48,7 +45,7 @@ jobs:
 
     timeout-minutes: 30
 
-    environment: ${{ github.event.inputs.environment }}
+    environment: ${{ inputs.environment }}
 
     defaults:
       run:
@@ -59,95 +56,627 @@ jobs:
       TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
-      ENVIRONMENT: ${{ github.event.inputs.environment }}
-      OPERATION: ${{ github.event.inputs.operation }}
-      REQUEST_FILE: ${{ github.event.inputs.request_file }}
-      DRY_RUN: ${{ github.event.inputs.dry_run }}
+      ENVIRONMENT: ${{ inputs.environment }}
+      OPERATION: ${{ inputs.operation }}
+      DRY_RUN: ${{ inputs.dry_run }}
 
     steps:
 
-      - name: Checkout Repository
+      #======================================================
+      # 01 - Checkout Automation Repository
+      #======================================================
+
+      - name: Checkout Automation Repository
         uses: actions/checkout@v4
+
+      #======================================================
+      # 02 - Checkout CSV Data
+      #
+      # Automation code comes from main.
+      # CSV data comes from csv-upload.
+      #======================================================
+
+      - name: Checkout CSV Data
+        shell: bash
+        run: |
+
+          echo "Fetching csv-upload branch..."
+
+          git fetch origin csv-upload
+
+          echo "Checking out CSV directory..."
+
+          git checkout FETCH_HEAD -- csv
+
+          echo ""
+          echo "CSV directory structure:"
+          find csv -maxdepth 4 -type f | sort
+
+      #======================================================
+      # 03 - Display Workflow Inputs
+      #======================================================
 
       - name: Display Workflow Inputs
         run: |
+
           Write-Host ""
-          Write-Host "======================================="
+          Write-Host "==========================================================="
           Write-Host " Entra ID Bulk Automation"
-          Write-Host "======================================="
-          Write-Host "Environment : $env:ENVIRONMENT"
-          Write-Host "Operation   : $env:OPERATION"
-          Write-Host "Request File: $env:REQUEST_FILE"
-          Write-Host "Dry Run     : $env:DRY_RUN"
-          Write-Host "======================================="
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          Write-Host ("{0,-25}: {1}" -f "Environment", $env:ENVIRONMENT)
+          Write-Host ("{0,-25}: {1}" -f "Operation", $env:OPERATION)
+          Write-Host ("{0,-25}: {1}" -f "Dry Run", $env:DRY_RUN)
+
+          Write-Host ""
+
+          Write-Host "==========================================================="
+          Write-Host ""
+
+      #======================================================
+      # 04 - Validate Environment
+      #======================================================
+
+      - name: Validate Environment
+        run: |
+
+          Write-Host ""
+          Write-Host "Validating environment..."
+          Write-Host ""
+
+          $ValidEnvironments = @(
+              "DEV",
+              "UAT",
+              "PRD"
+          )
+
+          if ([string]::IsNullOrWhiteSpace($env:ENVIRONMENT))
+          {
+              throw "Environment was not selected."
+          }
+
+          if ($env:ENVIRONMENT -notin $ValidEnvironments)
+          {
+              throw "Invalid environment: $env:ENVIRONMENT"
+          }
+
+          Write-Host "✓ Environment is valid."
+          Write-Host "  Environment: $env:ENVIRONMENT"
+
+      #======================================================
+      # 05 - Validate Operation
+      #======================================================
+
+      - name: Validate Operation
+        run: |
+
+          Write-Host ""
+          Write-Host "Validating operation..."
+          Write-Host ""
+
+          $ValidOperations = @(
+              "Add Users to Group",
+              "Remove Users from Group",
+              "Add Devices to Group",
+              "Remove Devices from Group"
+          )
+
+          if ([string]::IsNullOrWhiteSpace($env:OPERATION))
+          {
+              throw "Operation was not selected."
+          }
+
+          if ($env:OPERATION -notin $ValidOperations)
+          {
+              throw "Invalid operation: $env:OPERATION"
+          }
+
+          Write-Host "✓ Operation is valid."
+          Write-Host "  Operation: $env:OPERATION"
+
+      #======================================================
+      # 06 - Validate Dry Run
+      #======================================================
+
+      - name: Validate Dry Run
+        run: |
+
+          Write-Host ""
+          Write-Host "Validating Dry Run option..."
+          Write-Host ""
+
+          if ($env:DRY_RUN -notin @(
+              "Yes",
+              "No"
+          ))
+          {
+              throw "Invalid Dry Run value: $env:DRY_RUN"
+          }
+
+          Write-Host "✓ Dry Run option is valid."
+          Write-Host "  Dry Run: $env:DRY_RUN"
+
+      #======================================================
+      # 07 - Determine Input Type
+      #======================================================
+
+      - name: Determine Input Type
+        run: |
+
+          switch ($env:OPERATION)
+          {
+              "Add Users to Group"
+              {
+                  $InputType = "Users"
+              }
+
+              "Remove Users from Group"
+              {
+                  $InputType = "Users"
+              }
+
+              "Add Devices to Group"
+              {
+                  $InputType = "Devices"
+              }
+
+              "Remove Devices from Group"
+              {
+                  $InputType = "Devices"
+              }
+
+              default
+              {
+                  throw "Unable to determine input type."
+              }
+          }
+
+          "INPUT_TYPE=$InputType" |
+              Out-File `
+                  -FilePath $env:GITHUB_ENV `
+                  -Encoding utf8 `
+                  -Append
+
+          Write-Host ""
+          Write-Host "Input Type: $InputType"
+
+      #======================================================
+      # 08 - Validate Environment Folder
+      #======================================================
+
+      - name: Validate Environment Folder
+        run: |
+
+          $EnvironmentPath = "./csv/$env:ENVIRONMENT"
+          $PendingPath = "$EnvironmentPath/Pending"
+
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " Environment Folder Validation"
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          Write-Host "Environment Path: $EnvironmentPath"
+          Write-Host "Pending Path    : $PendingPath"
+          Write-Host ""
+
+          if (-not (
+              Test-Path `
+                  -LiteralPath $EnvironmentPath `
+                  -PathType Container
+          ))
+          {
+              throw "Environment folder does not exist: $EnvironmentPath"
+          }
+
+          if (-not (
+              Test-Path `
+                  -LiteralPath $PendingPath `
+                  -PathType Container
+          ))
+          {
+              throw "Pending folder does not exist: $PendingPath"
+          }
+
+          Write-Host "✓ Environment folder exists."
+          Write-Host "✓ Pending folder exists."
+
+      #======================================================
+      # 09 - Determine Request File
+      #======================================================
+
+      - name: Determine Request File
+        run: |
+
+          $Environment = $env:ENVIRONMENT
+          $Operation = $env:OPERATION
+
+          switch ($Operation)
+          {
+              "Add Users to Group"
+              {
+                  $ActionName = "add-users-to-groups"
+              }
+
+              "Remove Users from Group"
+              {
+                  $ActionName = "remove-users-from-groups"
+              }
+
+              "Add Devices to Group"
+              {
+                  $ActionName = "add-devices-to-groups"
+              }
+
+              "Remove Devices from Group"
+              {
+                  $ActionName = "remove-devices-from-groups"
+              }
+
+              default
+              {
+                  throw "Unsupported operation: $Operation"
+              }
+          }
+
+          $RequestFile = "$($Environment.ToLower())-$ActionName.csv"
+
+          $CsvPath = "./csv/$Environment/Pending/$RequestFile"
+
+          "REQUEST_FILE=$RequestFile" |
+              Out-File `
+                  -FilePath $env:GITHUB_ENV `
+                  -Encoding utf8 `
+                  -Append
+
+          "CSV_PATH=$CsvPath" |
+              Out-File `
+                  -FilePath $env:GITHUB_ENV `
+                  -Encoding utf8 `
+                  -Append
+
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " Request File"
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          Write-Host "Environment : $Environment"
+          Write-Host "Operation   : $Operation"
+          Write-Host "Request File: $RequestFile"
+          Write-Host "CSV Path    : $CsvPath"
+
+      #======================================================
+      # 10 - Validate Request File
+      #======================================================
 
       - name: Validate Request File
         run: |
 
-          $CsvPath = "./csv/pending/$env:REQUEST_FILE"
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " Request File Validation"
+          Write-Host "==========================================================="
+          Write-Host ""
 
-          if (!(Test-Path $CsvPath))
+          Write-Host "Environment : $env:ENVIRONMENT"
+          Write-Host "Operation   : $env:OPERATION"
+          Write-Host "Input Type  : $env:INPUT_TYPE"
+          Write-Host "Request File: $env:REQUEST_FILE"
+          Write-Host "CSV Path    : $env:CSV_PATH"
+          Write-Host ""
+
+          if (-not (
+              Test-Path `
+                  -LiteralPath $env:CSV_PATH `
+                  -PathType Leaf
+          ))
           {
-              throw "Request file not found: $CsvPath"
+              Write-Host "Expected request file was not found."
+              Write-Host ""
+
+              Write-Host "Available files in:"
+              Write-Host "./csv/$env:ENVIRONMENT/Pending"
+              Write-Host ""
+
+              Get-ChildItem `
+                  -LiteralPath "./csv/$env:ENVIRONMENT/Pending" `
+                  -File |
+                  Select-Object -ExpandProperty Name
+
+              throw "Request file not found: $env:CSV_PATH"
           }
 
-          Write-Host "Request file validated successfully."
+          $File = Get-Item `
+              -LiteralPath $env:CSV_PATH
+
+          Write-Host "✓ Request file found."
+          Write-Host ""
+
+          Write-Host ("File Name : {0}" -f $File.Name)
+          Write-Host ("File Size : {0} bytes" -f $File.Length)
+
+      #======================================================
+      # 11 - Validate CSV Structure
+      #======================================================
+
+      - name: Validate CSV Structure
+        run: |
+
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " CSV Structure Validation"
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          $Rows = @(
+              Import-Csv `
+                  -LiteralPath $env:CSV_PATH
+          )
+
+          if ($Rows.Count -eq 0)
+          {
+              throw "CSV file contains no records."
+          }
+
+          $Columns = @(
+              $Rows[0].PSObject.Properties.Name
+          )
+
+          Write-Host "Input Type: $env:INPUT_TYPE"
+          Write-Host ""
+
+          Write-Host "Columns detected:"
+          foreach ($Column in $Columns)
+          {
+              Write-Host " - $Column"
+          }
+
+          Write-Host ""
+
+          if ($env:INPUT_TYPE -eq "Users")
+          {
+              $RequiredColumns = @(
+                  "UserEmail",
+                  "GroupName"
+              )
+          }
+          else
+          {
+              $RequiredColumns = @(
+                  "DeviceName",
+                  "GroupName"
+              )
+          }
+
+          foreach ($Column in $RequiredColumns)
+          {
+              if ($Column -notin $Columns)
+              {
+                  throw "Required column '$Column' is missing."
+              }
+          }
+
+          Write-Host "✓ CSV structure validated."
+          Write-Host "Records Found: $($Rows.Count)"
+
+      #======================================================
+      # 12 - Install Microsoft Graph Modules
+      #======================================================
 
       - name: Install Microsoft Graph PowerShell Modules
         run: |
 
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Write-Host ""
+          Write-Host "Installing Microsoft Graph PowerShell modules..."
+          Write-Host ""
 
-          Install-Module Microsoft.Graph.Authentication -Scope CurrentUser -Force
+          Set-PSRepository `
+              PSGallery `
+              -InstallationPolicy Trusted
 
-          Install-Module Microsoft.Graph.Users -Scope CurrentUser -Force
+          Install-Module `
+              Microsoft.Graph.Authentication `
+              -Scope CurrentUser `
+              -Force
 
-          Install-Module Microsoft.Graph.Groups -Scope CurrentUser -Force
+          Install-Module `
+              Microsoft.Graph.Users `
+              -Scope CurrentUser `
+              -Force
 
-          Install-Module Microsoft.Graph.Identity.DirectoryManagement -Scope CurrentUser -Force
+          Install-Module `
+              Microsoft.Graph.Groups `
+              -Scope CurrentUser `
+              -Force
+
+          Install-Module `
+              Microsoft.Graph.Identity.DirectoryManagement `
+              -Scope CurrentUser `
+              -Force
+
+          Write-Host ""
+          Write-Host "✓ Microsoft Graph modules installed."
+
+      #======================================================
+      # 13 - Display Graph SDK Information
+      #======================================================
 
       - name: Display Graph SDK Information
         run: |
-          Get-InstalledModule Microsoft.Graph.Authentication
 
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " Microsoft Graph SDK"
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          Write-Host "Authentication Module:"
+          Get-InstalledModule `
+              Microsoft.Graph.Authentication
+
+          Write-Host ""
+          Write-Host "Connect-MgGraph:"
           Get-Command Connect-MgGraph
 
-          Get-Command Connect-MgGraph -Syntax
+          Write-Host ""
+          Write-Host "Graph Modules:"
+          Get-Module `
+              -ListAvailable `
+              Microsoft.Graph.Users,
+              Microsoft.Graph.Groups,
+              Microsoft.Graph.Identity.DirectoryManagement |
+              Select-Object Name, Version
 
-      - name: Verify Remove Cmdlet
+      #======================================================
+      # 14 - Verify Required Cmdlets
+      #======================================================
+
+      - name: Verify Required Cmdlets
         run: |
-            Get-Command Remove-MgGroupMemberDirectoryObjectByRef
+
+          Write-Host ""
+          Write-Host "Checking required Graph cmdlets..."
+          Write-Host ""
+
+          $RequiredCmdlets = @(
+              "Connect-MgGraph",
+              "Get-MgUser",
+              "Get-MgGroup",
+              "Get-MgDevice",
+              "Get-MgGroupMember"
+          )
+
+          foreach ($Cmdlet in $RequiredCmdlets)
+          {
+              if (Get-Command `
+                  $Cmdlet `
+                  -ErrorAction SilentlyContinue)
+              {
+                  Write-Host "✓ $Cmdlet"
+              }
+              else
+              {
+                  Write-Host "⚠ $Cmdlet not available"
+              }
+          }
+
+          Write-Host ""
+
+      #======================================================
+      # 15 - Display Request Preview
+      #======================================================
+
+      - name: Display Request Preview
+        run: |
+
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " Request Preview"
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          Write-Host "Environment : $env:ENVIRONMENT"
+          Write-Host "Operation   : $env:OPERATION"
+          Write-Host "Input Type  : $env:INPUT_TYPE"
+          Write-Host "Request File: $env:REQUEST_FILE"
+          Write-Host "Dry Run     : $env:DRY_RUN"
+          Write-Host ""
+
+          Import-Csv `
+              -LiteralPath $env:CSV_PATH |
+              Select-Object -First 5 |
+              Format-Table -AutoSize
+
+          Write-Host ""
+          Write-Host "Preview limited to first 5 records."
+
+      #======================================================
+      # 16 - Execute Automation
+      #======================================================
 
       - name: Execute Automation
         run: |
 
+          Write-Host ""
+          Write-Host "==========================================================="
+          Write-Host " Starting Automation"
+          Write-Host "==========================================================="
+          Write-Host ""
+
+          Write-Host "Environment : $env:ENVIRONMENT"
+          Write-Host "Operation   : $env:OPERATION"
+          Write-Host "Input Type  : $env:INPUT_TYPE"
+          Write-Host "Request File: $env:REQUEST_FILE"
+          Write-Host "CSV Path    : $env:CSV_PATH"
+          Write-Host "Dry Run     : $env:DRY_RUN"
+          Write-Host ""
+
           ./scripts/main.ps1 `
-            -Operation "$env:OPERATION" `
-            -CsvPath "./csv/pending/$env:REQUEST_FILE" `
-            -DryRun "$env:DRY_RUN"
+              -Operation "$env:OPERATION" `
+              -CsvPath "$env:CSV_PATH" `
+              -DryRun "$env:DRY_RUN"
+
+      #======================================================
+      # 17 - Generate Job Summary
+      #======================================================
 
       - name: Generate Job Summary
         if: always()
-
         run: |
 
-          Add-Content $env:GITHUB_STEP_SUMMARY "# Entra ID Bulk Automation"
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "# Entra ID Bulk Automation"
 
-          Add-Content $env:GITHUB_STEP_SUMMARY ""
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              ""
 
-          Add-Content $env:GITHUB_STEP_SUMMARY "| Item | Value |"
-          Add-Content $env:GITHUB_STEP_SUMMARY "|------|-------|"
-          Add-Content $env:GITHUB_STEP_SUMMARY "| Environment | $env:ENVIRONMENT |"
-          Add-Content $env:GITHUB_STEP_SUMMARY "| Operation | $env:OPERATION |"
-          Add-Content $env:GITHUB_STEP_SUMMARY "| Request File | $env:REQUEST_FILE |"
-          Add-Content $env:GITHUB_STEP_SUMMARY "| Dry Run | $env:DRY_RUN |"
-          Add-Content $env:GITHUB_STEP_SUMMARY "| Triggered By | $env:GITHUB_ACTOR |"
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Item | Value |"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "|------|-------|"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Environment | $env:ENVIRONMENT |"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Operation | $env:OPERATION |"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Input Type | $env:INPUT_TYPE |"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Request File | $env:REQUEST_FILE |"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Dry Run | $env:DRY_RUN |"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Triggered By | $env:GITHUB_ACTOR |"
+
+          Add-Content `
+              $env:GITHUB_STEP_SUMMARY `
+              "| Run Number | $env:GITHUB_RUN_NUMBER |"
+
+      #======================================================
+      # 18 - Upload Logs
+      #======================================================
 
       - name: Upload Logs
         if: always()
-
         uses: actions/upload-artifact@v4
-
         with:
           name: logs-${{ github.run_number }}
           path: logs/
