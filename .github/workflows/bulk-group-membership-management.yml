@@ -33,7 +33,7 @@ on:
           - "No"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
 
