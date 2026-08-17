@@ -1,4 +1,7 @@
-﻿# Entra ID Bulk Group Automation
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/b2dde292-63c1-4d57-ba1e-9e3db9c24f3b" />
+
+  
+ # Entra ID Bulk Group Automation
 
 A GitHub Actions-based automation project for performing bulk Microsoft
 Entra ID group membership operations using Microsoft Graph PowerShell
